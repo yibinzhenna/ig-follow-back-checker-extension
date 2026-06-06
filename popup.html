@@ -265,6 +265,39 @@
     }
 
     .empty { padding: 20px; text-align: center; font-size: 13px; color: #444; }
+
+    .item-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+    .unfollow-btn {
+      background: none;
+      border: 1px solid #3a1515;
+      border-radius: 6px;
+      padding: 4px 8px;
+      color: #ff6b6b;
+      font-size: 11px;
+      cursor: pointer;
+      font-family: 'DM Sans', sans-serif;
+      transition: background .15s, color .15s;
+    }
+    .unfollow-btn:hover { background: #1a0808; }
+    .unfollow-btn:disabled { opacity: .4; cursor: default; }
+
+    .unfollow-all-btn {
+      width: 100%;
+      margin-top: 10px;
+      padding: 9px;
+      border-radius: 8px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      background: #1a0808;
+      border: 1px solid #3a1515;
+      color: #ff6b6b;
+      transition: background .15s;
+    }
+    .unfollow-all-btn:hover { background: #2a0a0a; }
+    .unfollow-all-btn:disabled { opacity: .4; cursor: default; }
   </style>
 </head>
 <body>
@@ -304,10 +337,12 @@
 
     <div class="list-header" id="list-header">
       <span id="count-label">0 accounts</span>
-      <button class="copy-all" id="copy-all">Copy usernames</button>
+      <button class="copy-all" id="copy-all">Copy</button>
     </div>
 
     <div class="list" id="list"></div>
+
+    <button class="unfollow-all-btn" id="unfollow-all-btn" disabled>Unfollow all</button>
 
     <p class="notice">Must be logged in to Instagram. Only works on your own account or public accounts.</p>
   </div>
