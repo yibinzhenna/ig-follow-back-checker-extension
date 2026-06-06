@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IG Followback Checker</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500&family=DM+Mono&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      width: 360px;
+      font-family: 'DM Sans', sans-serif;
+      background: #0a0a0a;
+      color: #f0f0f0;
+      padding: 0;
+    }
+
+    .header {
+      padding: 16px 18px 12px;
+      border-bottom: 1px solid #1e1e1e;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo {
+      width: 28px;
+      height: 28px;
+      background: linear-gradient(135deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .logo svg { width: 16px; height: 16px; fill: white; }
+
+    .header-text h1 { font-size: 14px; font-weight: 500; color: #f0f0f0; }
+    .header-text p { font-size: 11px; color: #666; margin-top: 1px; }
+
+    .body { padding: 14px 18px; }
+
+    .input-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .input-row input {
+      flex: 1;
+      padding: 8px 12px;
+      background: #141414;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      font-family: 'DM Mono', monospace;
+      font-size: 13px;
+      color: #f0f0f0;
+      outline: none;
+      transition: border-color .15s;
+    }
+
+    .input-row input:focus { border-color: #444; }
+    .input-row input::placeholder { color: #444; }
+
+    .input-row button {
+      padding: 8px 14px;
+      background: #f0f0f0;
+      color: #0a0a0a;
+      border: none;
+      border-radius: 8px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: opacity .15s;
+    }
+
+    .input-row button:hover { opacity: .85; }
+    .input-row button:disabled { opacity: .4; cursor: default; }
+
+    .status-bar {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 12px;
+      background: #141414;
+      border-radius: 8px;
+      margin-bottom: 14px;
+      font-size: 12px;
+      color: #888;
+    }
+
+    .status-bar.visible { display: flex; }
+
+    .spinner {
+      width: 14px; height: 14px;
+      border: 1.5px solid #333;
+      border-top-color: #f0f0f0;
+      border-radius: 50%;
+      animation: spin .6s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .stats {
+      display: none;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .stats.visible { display: grid; }
+
+    .stat {
+      background: #141414;
+      border-radius: 8px;
+      padding: 10px;
+      text-align: center;
+    }
+    .stat-num { font-size: 20px; font-weight: 500; color: #f0f0f0; }
+    .stat-lbl { font-size: 10px; color: #555; margin-top: 2px; text-transform: uppercase; letter-spacing: .05em; }
+    .stat.highlight .stat-num { color: #ff6b6b; }
+
+    .search-wrap {
+      display: none;
+      position: relative;
+      margin-bottom: 8px;
+    }
+    .search-wrap.visible { display: block; }
+    .search-wrap svg {
+      position: absolute;
+      left: 10px; top: 50%;
+      transform: translateY(-50%);
+      width: 14px; height: 14px;
+      stroke: #555; fill: none; stroke-width: 2;
+    }
+    .search-wrap input {
+      width: 100%;
+      padding: 7px 10px 7px 30px;
+      background: #141414;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 12px;
+      color: #f0f0f0;
+      outline: none;
+    }
+    .search-wrap input:focus { border-color: #444; }
+    .search-wrap input::placeholder { color: #444; }
+
+    .list-header {
+      display: none;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    .list-header.visible { display: flex; }
+    .list-header span { font-size: 11px; color: #555; }
+    .copy-all {
+      font-size: 11px;
+      color: #888;
+      background: none;
+      border: 1px solid #2a2a2a;
+      border-radius: 6px;
+      padding: 3px 8px;
+      cursor: pointer;
+      font-family: 'DM Sans', sans-serif;
+      transition: color .15s, border-color .15s;
+    }
+    .copy-all:hover { color: #f0f0f0; border-color: #444; }
+
+    .list {
+      display: none;
+      max-height: 260px;
+      overflow-y: auto;
+      border: 1px solid #1e1e1e;
+      border-radius: 10px;
+    }
+    .list.visible { display: block; }
+    .list::-webkit-scrollbar { width: 4px; }
+    .list::-webkit-scrollbar-track { background: transparent; }
+    .list::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 4px; }
+
+    .list-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border-bottom: 1px solid #141414;
+      transition: background .1s;
+    }
+    .list-item:last-child { border-bottom: none; }
+    .list-item:hover { background: #111; }
+
+    .avatar {
+      width: 30px; height: 30px;
+      border-radius: 50%;
+      background: #1e1e1e;
+      flex-shrink: 0;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 500;
+      color: #555;
+      font-family: 'DM Mono', monospace;
+    }
+    .avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+    .item-info { flex: 1; min-width: 0; }
+    .item-username {
+      font-size: 13px;
+      font-family: 'DM Mono', monospace;
+      color: #e0e0e0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .item-name {
+      font-size: 11px;
+      color: #555;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .open-btn {
+      background: none;
+      border: 1px solid #2a2a2a;
+      border-radius: 6px;
+      padding: 4px 8px;
+      color: #666;
+      font-size: 11px;
+      cursor: pointer;
+      font-family: 'DM Sans', sans-serif;
+      flex-shrink: 0;
+      transition: color .15s, border-color .15s;
+    }
+    .open-btn:hover { color: #f0f0f0; border-color: #444; }
+
+    .error-box {
+      display: none;
+      padding: 10px 12px;
+      background: #1a0808;
+      border: 1px solid #3a1515;
+      border-radius: 8px;
+      font-size: 12px;
+      color: #ff6b6b;
+      margin-bottom: 12px;
+      line-height: 1.5;
+    }
+    .error-box.visible { display: block; }
+
+    .notice {
+      font-size: 11px;
+      color: #3a3a3a;
+      line-height: 1.5;
+      padding-top: 10px;
+      border-top: 1px solid #141414;
+      margin-top: 4px;
+    }
+
+    .empty { padding: 20px; text-align: center; font-size: 13px; color: #444; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">
+      <svg viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+    </div>
+    <div class="header-text">
+      <h1>Followback Checker</h1>
+      <p>Find who doesn't follow you back</p>
+    </div>
+  </div>
+
+  <div class="body">
+    <div class="input-row">
+      <input type="text" id="username-input" placeholder="your_username" spellcheck="false" autocomplete="off">
+      <button id="check-btn">Check</button>
+    </div>
+
+    <div class="error-box" id="error-box"></div>
+
+    <div class="status-bar" id="status-bar">
+      <div class="spinner"></div>
+      <span id="status-text">Starting…</span>
+    </div>
+
+    <div class="stats" id="stats">
+      <div class="stat"><div class="stat-num" id="s-following">—</div><div class="stat-lbl">Following</div></div>
+      <div class="stat"><div class="stat-num" id="s-followers">—</div><div class="stat-lbl">Followers</div></div>
+      <div class="stat highlight"><div class="stat-num" id="s-nfb">—</div><div class="stat-lbl">Not back</div></div>
+    </div>
+
+    <div class="search-wrap" id="search-wrap">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" id="search-input" placeholder="Search…">
+    </div>
+
+    <div class="list-header" id="list-header">
+      <span id="count-label">0 accounts</span>
+      <button class="copy-all" id="copy-all">Copy usernames</button>
+    </div>
+
+    <div class="list" id="list"></div>
+
+    <p class="notice">Must be logged in to Instagram. Only works on your own account or public accounts.</p>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
