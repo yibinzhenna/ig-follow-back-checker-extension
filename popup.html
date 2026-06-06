@@ -298,6 +298,18 @@
     }
     .unfollow-all-btn:hover { background: #2a0a0a; }
     .unfollow-all-btn:disabled { opacity: .4; cursor: default; }
+
+    .discrepancy-box {
+      display: none;
+      padding: 9px 12px;
+      background: #111a0a;
+      border: 1px solid #2a3a15;
+      border-radius: 8px;
+      font-size: 11px;
+      color: #9acd6a;
+      margin-bottom: 12px;
+      line-height: 1.5;
+    }
   </style>
 </head>
 <body>
@@ -330,6 +342,7 @@
       <div class="stat highlight"><div class="stat-num" id="s-nfb">—</div><div class="stat-lbl">Not back</div></div>
     </div>
 
+    <div class="discrepancy-box" id="discrepancy-box"></div>
     <div class="search-wrap" id="search-wrap">
       <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
       <input type="text" id="search-input" placeholder="Search…">

@@ -15,7 +15,12 @@ async function getUserId(username) {
   });
   if (!res.ok) throw new Error('Could not fetch profile. Make sure you are logged in to Instagram.');
   const data = await res.json();
-  return data?.data?.user?.id;
+  const user = data?.data?.user;
+  return {
+    id: user?.id,
+    followersCount: user?.edge_followed_by?.count ?? null,
+    followingCount: user?.edge_follow?.count ?? null,
+  };
 }
 
 async function fetchAll(userId, type) {
@@ -23,35 +28,82 @@ async function fetchAll(userId, type) {
     ? `https://www.instagram.com/api/v1/friendships/${userId}/followers/`
     : `https://www.instagram.com/api/v1/friendships/${userId}/following/`;
 
-  const users = [];
+  const users = new Map(); // keyed by user id to deduplicate
   let nextMaxId = null;
+  let retries = 0;
+  const MAX_RETRIES = 3;
 
   while (true) {
-    const url = nextMaxId ? `${endpoint}?max_id=${nextMaxId}&count=200` : `${endpoint}?count=200`;
-    const res = await fetch(url, {
-      headers: { 'x-ig-app-id': '936619743392459' }
-    });
+    const url = nextMaxId
+      ? `${endpoint}?max_id=${nextMaxId}&count=200`
+      : `${endpoint}?count=200`;
+
+    let res;
+    try {
+      res = await fetch(url, {
+        headers: { 'x-ig-app-id': '936619743392459' }
+      });
+    } catch (networkErr) {
+      if (retries < MAX_RETRIES) {
+        retries++;
+        await new Promise(r => setTimeout(r, 2000 * retries));
+        continue;
+      }
+      throw new Error('Network error while fetching. Check your connection.');
+    }
 
     if (res.status === 401) throw new Error('Not logged in to Instagram. Please log in and try again.');
-    if (res.status === 429) throw new Error('Instagram rate-limited this request. Wait a few minutes and try again.');
-    if (!res.ok) throw new Error(`Instagram returned an error (${res.status}). Try again.`);
+    if (res.status === 429) {
+      // Rate limited — wait and retry
+      if (retries < MAX_RETRIES) {
+        retries++;
+        chrome.runtime.sendMessage({ type: 'STATUS', payload: { text: `Rate limited, waiting ${30 * retries}s…` } });
+        await new Promise(r => setTimeout(r, 30000 * retries));
+        continue;
+      }
+      throw new Error('Instagram rate-limited this request. Wait a few minutes and try again.');
+    }
+    if (!res.ok) {
+      if (retries < MAX_RETRIES) {
+        retries++;
+        await new Promise(r => setTimeout(r, 3000));
+        continue;
+      }
+      throw new Error(`Instagram returned an error (${res.status}). Try again.`);
+    }
 
-    const data = await res.json();
+    retries = 0; // reset retries on success
+
+    let data;
+    try {
+      data = await res.json();
+    } catch {
+      if (retries < MAX_RETRIES) { retries++; continue; }
+      throw new Error('Received invalid response from Instagram.');
+    }
+
     const batch = data.users || [];
-    users.push(...batch);
+
+    // Deduplicate by user pk
+    for (const u of batch) {
+      users.set(u.pk, u);
+    }
 
     chrome.runtime.sendMessage({
       type: 'PROGRESS',
-      payload: { type, count: users.length }
+      payload: { type, count: users.size }
     });
 
     nextMaxId = data.next_max_id;
+
+    // Stop if no more pages or empty batch
     if (!nextMaxId || batch.length === 0) break;
 
-    await new Promise(r => setTimeout(r, 800));
+    // Vary the delay slightly to be less detectable (1–2s)
+    await new Promise(r => setTimeout(r, 1000 + Math.random() * 1000));
   }
 
-  return users;
+  return [...users.values()];
 }
 
 async function unfollowUser(userId) {
@@ -82,7 +134,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         sendResponse({ status: 'started' });
 
         chrome.runtime.sendMessage({ type: 'STATUS', payload: { text: 'Looking up account…' } });
-        const userId = await getUserId(username);
+        const { id: userId, followersCount, followingCount } = await getUserId(username);
         if (!userId) throw new Error('Account not found. Check the username and try again.');
 
         chrome.runtime.sendMessage({ type: 'STATUS', payload: { text: 'Fetching following list…' } });
@@ -91,9 +143,9 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         chrome.runtime.sendMessage({ type: 'STATUS', payload: { text: 'Fetching followers list…' } });
         const followers = await fetchAll(userId, 'followers');
 
-        const followerSet = new Set(followers.map(u => u.username));
+        const followerSet = new Set(followers.map(u => u.pk));
         const notFollowingBack = following
-          .filter(u => !followerSet.has(u.username))
+          .filter(u => !followerSet.has(u.pk))
           .map(u => ({ username: u.username, full_name: u.full_name, profile_pic_url: u.profile_pic_url, id: u.pk }))
           .sort((a, b) => a.username.localeCompare(b.username));
 
@@ -114,12 +166,21 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           }
         }));
 
+        // Note any discrepancy between API list count vs displayed count
+        const discrepancy = {
+          followers: followersCount !== null ? followersCount - followers.length : null,
+          following: followingCount !== null ? followingCount - following.length : null,
+        };
+
         chrome.runtime.sendMessage({
           type: 'DONE',
           payload: {
             notFollowingBack: withPics,
             followingCount: following.length,
-            followersCount: followers.length
+            followersCount: followers.length,
+            displayedFollowersCount: followersCount,
+            displayedFollowingCount: followingCount,
+            discrepancy,
           }
         });
 
@@ -147,7 +208,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type === 'UNFOLLOW_ALL') {
     (async () => {
       sendResponse({ status: 'started' });
-      const users = msg.users; // array of { id, username }
+      const users = msg.users;
       let done = 0;
       let failed = 0;
 
@@ -161,7 +222,6 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           });
         } catch (err) {
           if (err.message === 'rate_limited') {
-            // Back off and retry once after 60s
             chrome.runtime.sendMessage({
               type: 'UNFOLLOW_PROGRESS',
               payload: { done, failed, total: users.length, username: u.username, rateLimited: true }
@@ -177,7 +237,6 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
             failed++;
           }
         }
-        // 2–4s random delay between each unfollow to mimic human behavior
         const delay = 2000 + Math.random() * 2000;
         await new Promise(r => setTimeout(r, delay));
       }

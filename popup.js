@@ -103,7 +103,6 @@ async function unfollowOne(userId, username, itemEl, btn) {
       setTimeout(() => { btn.textContent = 'Unfollow'; btn.disabled = false; btn.style.color = ''; }, 2000);
       return;
     }
-    // Remove from allResults and animate out
     allResults = allResults.filter(u => u.id !== userId);
     itemEl.style.opacity = '0';
     itemEl.style.transform = 'translateX(10px)';
@@ -122,6 +121,27 @@ function updateUnfollowAllBtn() {
   if (allResults.length === 0) btn.disabled = true;
 }
 
+function showDiscrepancy(discrepancy, displayedFollowersCount, displayedFollowingCount, fetchedFollowers, fetchedFollowing) {
+  const box = $('discrepancy-box');
+  if (!box) return;
+
+  const hasGap = (discrepancy.followers !== null && discrepancy.followers > 0) ||
+                 (discrepancy.following !== null && discrepancy.following > 0);
+
+  if (!hasGap) { box.style.display = 'none'; return; }
+
+  let msg = '⚠️ Instagram\'s displayed count differs from fetched results — ';
+  const parts = [];
+  if (discrepancy.followers > 0)
+    parts.push(`${displayedFollowersCount} followers shown vs ${fetchedFollowers} fetched`);
+  if (discrepancy.following > 0)
+    parts.push(`${displayedFollowingCount} following shown vs ${fetchedFollowing} fetched`);
+  msg += parts.join(', ') + '. The gap is usually ghost/deactivated accounts Instagram can\'t return via API.';
+
+  box.textContent = msg;
+  box.style.display = 'block';
+}
+
 function showResults(data) {
   allResults = data.notFollowingBack;
   $('status-bar').classList.remove('visible');
@@ -130,6 +150,14 @@ function showResults(data) {
   $('s-followers').textContent = data.followersCount;
   $('s-nfb').textContent = data.notFollowingBack.length;
   $('stats').classList.add('visible');
+
+  showDiscrepancy(
+    data.discrepancy,
+    data.displayedFollowersCount,
+    data.displayedFollowingCount,
+    data.followersCount,
+    data.followingCount
+  );
 
   $('search-wrap').classList.add('visible');
   $('list-header').classList.add('visible');
@@ -171,7 +199,6 @@ $('unfollow-all-btn').addEventListener('click', () => {
   $('unfollow-all-btn').textContent = 'Unfollowing…';
 
   const users = allResults.map(u => ({ id: u.id, username: u.username }));
-
   chrome.tabs.sendMessage(igTabId, { type: 'UNFOLLOW_ALL', users }, res => {
     if (chrome.runtime.lastError) {
       showError('Could not reach Instagram tab.');
@@ -181,7 +208,6 @@ $('unfollow-all-btn').addEventListener('click', () => {
   });
 });
 
-// Listen for unfollow progress from content script
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.type === 'UNFOLLOW_PROGRESS') {
     const { done, failed, total, username, rateLimited } = msg.payload;
@@ -190,7 +216,6 @@ chrome.runtime.onMessage.addListener((msg) => {
     } else {
       setStatus(`Unfollowed @${username} (${done}/${total}${failed ? `, ${failed} failed` : ''})`);
     }
-    // Remove from list
     allResults = allResults.filter(u => u.username !== username);
     const el = document.querySelector(`.list-item[data-username="${username}"]`);
     if (el) {
@@ -221,6 +246,8 @@ $('check-btn').addEventListener('click', async () => {
   $('list-header').classList.remove('visible');
   $('list').classList.remove('visible');
   $('list').innerHTML = '';
+  const dbox = $('discrepancy-box');
+  if (dbox) dbox.style.display = 'none';
   $('check-btn').disabled = true;
   allResults = [];
   isUnfollowingAll = false;
