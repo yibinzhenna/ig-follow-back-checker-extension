@@ -80,13 +80,31 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       const followerSet = new Set(followers.map(u => u.username));
       const notFollowingBack = following
         .filter(u => !followerSet.has(u.username))
-        .map(u => ({ username: u.username, full_name: u.full_name, profile_pic: u.profile_pic_url }))
+        .map(u => ({ username: u.username, full_name: u.full_name, profile_pic_url: u.profile_pic_url }))
         .sort((a, b) => a.username.localeCompare(b.username));
+
+      // Fetch profile pics as base64 so they load inside the extension popup
+      chrome.runtime.sendMessage({ type: 'STATUS', payload: { text: 'Loading profile pictures…' } });
+
+      const withPics = await Promise.all(notFollowingBack.map(async (u) => {
+        try {
+          const res = await fetch(u.profile_pic_url);
+          const blob = await res.blob();
+          const base64 = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result);
+            reader.readAsDataURL(blob);
+          });
+          return { ...u, profile_pic: base64 };
+        } catch {
+          return { ...u, profile_pic: null };
+        }
+      }));
 
       chrome.runtime.sendMessage({
         type: 'DONE',
         payload: {
-          notFollowingBack,
+          notFollowingBack: withPics,
           followingCount: following.length,
           followersCount: followers.length
         }

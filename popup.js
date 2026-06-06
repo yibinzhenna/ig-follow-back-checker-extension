@@ -24,24 +24,58 @@ function renderList(items) {
     list.innerHTML = '<div class="empty">No results found</div>';
     return;
   }
-  list.innerHTML = items.map(u => `
-    <div class="list-item">
-      <div class="avatar" data-user="${u.username}">
-        ${u.profile_pic
-          ? `<img src="${u.profile_pic}" alt="" onerror="this.parentElement.textContent='${u.username.slice(0,2).toUpperCase()}'">`
-          : u.username.slice(0,2).toUpperCase()}
-      </div>
-      <div class="item-info">
-        <div class="item-username">@${u.username}</div>
-        ${u.full_name ? `<div class="item-name">${u.full_name}</div>` : ''}
-      </div>
-      <button class="open-btn" data-url="https://www.instagram.com/${u.username}/">Open</button>
-    </div>
-  `).join('');
 
-  list.querySelectorAll('.open-btn').forEach(btn => {
-    btn.addEventListener('click', () => chrome.tabs.create({ url: btn.dataset.url }));
+  // Build DOM nodes directly to safely handle base64 data
+  list.innerHTML = '';
+  const fragment = document.createDocumentFragment();
+
+  items.forEach(u => {
+    const item = document.createElement('div');
+    item.className = 'list-item';
+
+    const avatar = document.createElement('div');
+    avatar.className = 'avatar';
+
+    if (u.profile_pic) {
+      const img = document.createElement('img');
+      img.src = u.profile_pic; // base64 data URL
+      img.alt = '';
+      img.onerror = () => {
+        avatar.removeChild(img);
+        avatar.textContent = u.username.slice(0, 2).toUpperCase();
+      };
+      avatar.appendChild(img);
+    } else {
+      avatar.textContent = u.username.slice(0, 2).toUpperCase();
+    }
+
+    const info = document.createElement('div');
+    info.className = 'item-info';
+
+    const uname = document.createElement('div');
+    uname.className = 'item-username';
+    uname.textContent = `@${u.username}`;
+    info.appendChild(uname);
+
+    if (u.full_name) {
+      const name = document.createElement('div');
+      name.className = 'item-name';
+      name.textContent = u.full_name;
+      info.appendChild(name);
+    }
+
+    const btn = document.createElement('button');
+    btn.className = 'open-btn';
+    btn.textContent = 'Open';
+    btn.addEventListener('click', () => chrome.tabs.create({ url: `https://www.instagram.com/${u.username}/` }));
+
+    item.appendChild(avatar);
+    item.appendChild(info);
+    item.appendChild(btn);
+    fragment.appendChild(item);
   });
+
+  list.appendChild(fragment);
 }
 
 function showResults(data) {
@@ -59,7 +93,6 @@ function showResults(data) {
   $('count-label').textContent = `${allResults.length} accounts`;
 
   renderList(allResults);
-
   $('check-btn').disabled = false;
 }
 
@@ -112,7 +145,6 @@ $('check-btn').addEventListener('click', async () => {
   // Find the Instagram tab and send the message
   const tabs = await chrome.tabs.query({ url: 'https://www.instagram.com/*' });
   if (!tabs.length) {
-    // Open Instagram first, then retry
     showError('Please open Instagram in a tab first, then try again.');
     $('check-btn').disabled = false;
     return;
