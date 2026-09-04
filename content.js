@@ -13,7 +13,12 @@ async function getUserId(username) {
   const res = await fetch(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`, {
     headers: { 'x-ig-app-id': '936619743392459' }
   });
-  if (!res.ok) throw new Error('Could not fetch profile. Make sure you are logged in to Instagram.');
+  if (!res.ok) {
+    if (res.status === 401) throw new Error('Not logged in to Instagram (401). Log in and try again.');
+    if (res.status === 429) throw new Error('Instagram rate-limited this request (429). Wait a few minutes.');
+    if (res.status === 404) throw new Error('Account not found (404).');
+    throw new Error(`Instagram returned ${res.status} while fetching the profile.`);
+  }
   const data = await res.json();
   const user = data?.data?.user;
   return {
